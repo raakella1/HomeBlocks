@@ -42,7 +42,8 @@ SISL_OPTION_GROUP(
      "number"),
     (run_time, "", "run_time", "running time in seconds", ::cxxopts::value< uint64_t >()->default_value("0"), "number"),
     (cp_timer_ms, "", "cp_timer_ms", "cp timer in milliseconds", ::cxxopts::value< uint64_t >()->default_value("60000"),
-     "number"));
+     "number"),
+    (read_verify, "", "read_verify", "Read and verify all data in long running tests", ::cxxopts::value< bool >()->default_value("false"), "true or false"));
 
 SISL_OPTIONS_ENABLE(logging, test_common_setup, test_volume_io_setup, homeblocks)
 SISL_LOGGING_DECL(test_volume_io)
@@ -538,6 +539,7 @@ TEST_F(VolumeIOTest, LongRunningRandomIO) {
 
     uint64_t total_reads{0}, total_writes{0};
     auto start_time = std::chrono::high_resolution_clock::now();
+    std::chrono::nanoseconds paused_duration{0};
     do {
         std::vector< folly::Future< folly::Unit > > futs;
 
@@ -553,15 +555,24 @@ TEST_F(VolumeIOTest, LongRunningRandomIO) {
 
         total_reads += get_total_reads();
         total_writes += get_total_writes();
-        std::chrono::duration< double > elapsed = std::chrono::high_resolution_clock::now() - start_time;
+        std::chrono::duration< double > elapsed = std::chrono::high_resolution_clock::now() - start_time - paused_duration;
         auto elapsed_seconds = static_cast< uint64_t >(elapsed.count());
         static uint64_t log_pct = 0;
         if (auto done_pct = (run_time > 0) ? (elapsed_seconds * 100) / run_time : 100; done_pct > log_pct) {
             LOGINFO("total_read={} total_write={} elapsed={}, done pct={}", total_reads, total_writes, elapsed_seconds, done_pct);
             log_pct += 5;
+            if (SISL_OPTIONS["read_verify"].as< bool >()) {
+                auto verify_start = std::chrono::high_resolution_clock::now();
+                LOGINFO("Verifying all data written so far");
+                verify_all_data();
+                paused_duration += std::chrono::high_resolution_clock::now() - verify_start;   
+            }
         }
-        
-        if (elapsed_seconds >= run_time) { break; }
+
+        if (elapsed_seconds >= run_time) {
+            LOGINFO("total_read={} total_write={} elapsed={}, done pct=100", total_reads, total_writes, elapsed_seconds);
+            break;
+        }
     } while (true);
 }
 
@@ -572,6 +583,7 @@ TEST_F(VolumeIOTest, LongRunningSequentialIO) {
 
     uint64_t volume_size = SISL_OPTIONS["vol_size_gb"].as< uint32_t >() * Gi;
     auto start_time = std::chrono::high_resolution_clock::now();
+    std::chrono::nanoseconds paused_duration{0};
     lba_t cur_lba = 0;
     lba_count_t nblks = 100;
     uint64_t total_reads{0}, total_writes{0};
@@ -588,12 +600,18 @@ TEST_F(VolumeIOTest, LongRunningSequentialIO) {
 
         total_reads += get_total_reads();
         total_writes += get_total_writes();
-        std::chrono::duration< double > elapsed = std::chrono::high_resolution_clock::now() - start_time;
+        std::chrono::duration< double > elapsed = std::chrono::high_resolution_clock::now() - start_time - paused_duration;
         auto elapsed_seconds = static_cast< uint64_t >(elapsed.count());
         static uint64_t log_pct = 0;
         if (auto done_pct = (run_time > 0) ? (elapsed_seconds * 100) / run_time : 100; done_pct > log_pct) {
             LOGINFO("total_read={} total_write={} elapsed={}, done pct={}", total_reads, total_writes, elapsed_seconds, done_pct);
             log_pct += 5;
+            if (SISL_OPTIONS["read_verify"].as< bool >()) {
+                auto verify_start = std::chrono::high_resolution_clock::now();
+                LOGINFO("Verifying all data written so far");
+                verify_all_data();
+                paused_duration += std::chrono::high_resolution_clock::now() - verify_start;   
+            }
         }
 
         if (((cur_lba + nblks) * g_page_size) >= volume_size) {
@@ -602,7 +620,10 @@ TEST_F(VolumeIOTest, LongRunningSequentialIO) {
             cur_lba += nblks;
         }
 
-        if (elapsed_seconds >= run_time) { break; }
+        if (elapsed_seconds >= run_time) { 
+            LOGINFO("total_read={} total_write={} elapsed={}, done pct=100", total_reads, total_writes, elapsed_seconds);
+            break;
+        }
     } while (true);
 }
 

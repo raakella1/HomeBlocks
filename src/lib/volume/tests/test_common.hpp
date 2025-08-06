@@ -192,7 +192,7 @@ public:
 
     void setup() {
         sisl::logging::SetLogger(test_name_);
-        sisl::logging::SetLogPattern("[%D %T%z] [%^%L%$] [%n] [%t] %v");
+        spdlog::set_pattern("[%D %T.%e] [%n] [%^%l%$] [%t] %v");
 
         // init svc_id_
         svc_id_ = boost::uuids::random_generator()();
