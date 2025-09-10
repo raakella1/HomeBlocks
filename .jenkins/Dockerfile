@@ -8,7 +8,7 @@ RUN set -eux; \
     sed -i 's/master/latest/g' /etc/apt/sources.list; \
     apt-get update; \
     apt-get upgrade -y; \
-    apt-get install --no-install-recommends -y iputils-ping net-tools fio iperf3; \
+    apt-get install --no-install-recommends -y iputils-ping net-tools fio iperf3 linux-tools-generic; \
     rm -rf /var/lib/apt/lists/*;
 
 
