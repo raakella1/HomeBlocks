@@ -129,9 +129,12 @@ public:
     }
 
     void remove_volume() {
-        auto vol_mgr = g_helper->inst()->volume_manager();
-        auto ret = vol_mgr->remove_volume(m_vol_id).get();
-        ASSERT_TRUE(ret);
+        if (!m_vol_id.is_nil()) {
+            auto vol_mgr = g_helper->inst()->volume_manager();
+            auto ret = vol_mgr->remove_volume(m_vol_id).get();
+            ASSERT_TRUE(ret);
+            m_vol_id = {};
+        }
     }
 
     void reset() {
@@ -808,6 +811,31 @@ TEST_F(VolumeIOTest, IndexPutFailure) {
     g_helper->remove_flip("vol_index_partial_put_failure");
 }
 #endif
+
+// This test only works if the remove volume is a sync operation in Homestore.
+// The test needs to be modified if this behaviour changes.
+TEST_F(VolumeIOTest, VolumeDestroyCapacity) {
+    LOGINFO("VolumeDestroyCapacity test started");
+    auto hb_inst = g_helper->inst();
+
+    auto vol = volume_list().back();
+    // check the initial used size
+    LOGINFO("Initial used capacity bytes={}", hb_inst->get_stats().used_capacity_bytes);
+    EXPECT_EQ(hb_inst->get_stats().used_capacity_bytes, 0);
+
+    // write some data
+    generate_write_io_single(vol, 1000 /* start_lba */, 100 /* nblks*/);
+    LOGINFO("Used capacity bytes after write={}", hb_inst->get_stats().used_capacity_bytes);
+    EXPECT_EQ(hb_inst->get_stats().used_capacity_bytes, 100 * g_page_size);
+
+    // destroy the volume and check the capacity is freed
+    vol->remove_volume();
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    LOGINFO("Used capacity bytes after volume destroy={}", hb_inst->get_stats().used_capacity_bytes);
+    EXPECT_EQ(hb_inst->get_stats().used_capacity_bytes, 0);
+
+    LOGINFO("VolumeDestroyCapacity test done");
+}
 
 int main(int argc, char* argv[]) {
     int parsed_argc = argc;

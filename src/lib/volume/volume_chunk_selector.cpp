@@ -317,6 +317,7 @@ void VolumeChunkSelector::release_chunks(uint64_t volume_ordinal) {
     for (auto chunk : volc->m_chunks) {
         if (chunk) {
             chunk->m_vol_ordinal = INVALID_VOL_ORDINAL;
+            chunk->reset();
             m_per_dev_chunks[chunk->get_pdev_id()].emplace(chunk->get_chunk_id(), chunk);
             fmt::format_to(std::back_inserter(str), "{} ", chunk->get_chunk_id());
             count++;
